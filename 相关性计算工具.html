@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相关性分析</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161d;
+    --surface2: #1a1e28;
+    --border: #252a38;
+    --accent: #4fc3a1;
+    --accent2: #7b9cff;
+    --warn: #f5a623;
+    --text: #e2e8f0;
+    --muted: #6b7a99;
+    --danger: #ff6b6b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  /* subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(79,195,161,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,195,161,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 48px;
+    text-align: left;
+  }
+
+  .label-chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    background: rgba(79,195,161,0.08);
+    border: 1px solid rgba(79,195,161,0.2);
+    padding: 4px 12px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* Input area */
+  .input-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 600px) {
+    .input-section { grid-template-columns: 1fr; }
+  }
+
+  .input-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .input-block:focus-within {
+    border-color: rgba(79,195,161,0.4);
+  }
+
+  .input-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .col-dot.a { background: var(--accent); }
+  .col-dot.b { background: var(--accent2); }
+
+  .input-header span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  textarea {
+    width: 100%;
+    height: 220px;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+    resize: vertical;
+  }
+
+  textarea::placeholder { color: #3a4155; }
+
+  /* OR divider for dual paste */
+  .paste-row {
+    margin-bottom: 16px;
+  }
+
+  .paste-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .paste-block:focus-within {
+    border-color: rgba(123,156,255,0.4);
+  }
+
+  .paste-block .input-header {
+    justify-content: space-between;
+  }
+
+  .paste-block textarea { height: 120px; }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    padding: 10px 24px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0d0f14;
+    font-weight: 500;
+  }
+
+  .btn-primary:hover { background: #67d4b4; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .sep-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  /* Results */
+  #results { display: none; }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 600px) {
+    .results-grid { grid-template-columns: 1fr; }
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.pearson::before { background: var(--accent); }
+  .stat-card.spearman::before { background: var(--accent2); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .stat-card:nth-child(2) { animation-delay: 0.08s; }
+
+  .stat-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-name {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  .stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .stat-card.pearson .stat-value { color: var(--accent); }
+  .stat-card.spearman .stat-value { color: var(--accent2); }
+
+  .stat-p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .sig-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .sig-badge.sig3  { background: rgba(79,195,161,0.15); color: var(--accent); }
+  .sig-badge.sig2  { background: rgba(79,195,161,0.1);  color: var(--accent); }
+  .sig-badge.sig1  { background: rgba(245,166,35,0.12); color: var(--warn); }
+  .sig-badge.ns    { background: rgba(107,122,153,0.1); color: var(--muted); }
+
+  /* Interpretation */
+  .interp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    animation: fadeUp 0.4s 0.16s ease both;
+    margin-bottom: 20px;
+  }
+
+  .interp-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .interp-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .interp-text strong { color: var(--accent); }
+
+  /* Mini scatter */
+  .scatter-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    animation: fadeUp 0.4s 0.24s ease both;
+  }
+
+  .scatter-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+  }
+
+  canvas { display: block; width: 100%; }
+
+  /* Error */
+  .error-msg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--danger);
+    background: rgba(255,107,107,0.07);
+    border: 1px solid rgba(255,107,107,0.2);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  /* Stats row */
+  .meta-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.4s 0.32s ease both;
+  }
+
+  .meta-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .meta-item span { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="label-chip">Statistical Tool</div>
+    <h1>相关性<em>分析</em></h1>
+    <p class="subtitle">粘贴两列数值数据，支持 Tab / 空格 / 逗号 分隔 · 自动计算 Pearson & Spearman 相关系数</p>
+  </header>
+
+  <!-- Two-column input -->
+  <div class="input-section">
+    <div class="input-block">
+      <div class="input-header">
+        <div class="col-dot a"></div>
+        <span>X 列数据（第一列）</span>
+      </div>
+      <textarea id="colA" placeholder="1.23&#10;4.56&#10;7.89&#10;..."></textarea>
+    </div>
+    <div class="input-block">
+      <div class="input-header">
+        <div class="col-dot b"></div>
+        <span>Y 列数据（第二列）</span>
+      </div>
+      <textarea id="colB" placeholder="2.34&#10;5.67&#10;8.90&#10;..."></textarea>
+    </div>
+  </div>
+
+  <!-- OR paste both columns together -->
+  <div class="paste-row">
+    <div class="paste-block">
+      <div class="input-header">
+        <span style="color:var(--muted)">或者直接粘贴两列（每行 X Y）</span>
+        <span style="font-size:11px;color:#3a4155">Tab / 空格 / 逗号</span>
+      </div>
+      <textarea id="colBoth" placeholder="1.23	2.34&#10;4.56	5.67&#10;7.89	8.90"></textarea>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errMsg"></div>
+
+  <div class="controls">
+    <button class="btn btn-primary" onclick="calculate()">▶ 计算相关性</button>
+    <button class="btn btn-ghost" onclick="clearAll()">清空</button>
+    <span class="sep-label" id="nLabel"></span>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="results-grid">
+      <div class="stat-card pearson">
+        <div class="stat-type">Pearson</div>
+        <div class="stat-name">线性相关系数 r</div>
+        <div class="stat-value" id="pearsonR">—</div>
+        <div class="stat-p" id="pearsonP"></div>
+        <span class="sig-badge" id="pearsonSig"></span>
+      </div>
+      <div class="stat-card spearman">
+        <div class="stat-type">Spearman</div>
+        <div class="stat-name">秩相关系数 ρ</div>
+        <div class="stat-value" id="spearmanR">—</div>
+        <div class="stat-p" id="spearmanP"></div>
+        <span class="sig-badge" id="spearmanSig"></span>
+      </div>
+    </div>
+
+    <div class="meta-row">
+      <div class="meta-item">样本量 n = <span id="metaN">—</span></div>
+      <div class="meta-item">X 均值 = <span id="metaMx">—</span></div>
+      <div class="meta-item">Y 均值 = <span id="metaMy">—</span></div>
+      <div class="meta-item">X SD = <span id="metaSx">—</span></div>
+      <div class="meta-item">Y SD = <span id="metaSy">—</span></div>
+    </div>
+
+    <div class="interp-card">
+      <div class="interp-icon" id="interpIcon">📊</div>
+      <div class="interp-text" id="interpText"></div>
+    </div>
+
+    <div class="scatter-card">
+      <div class="scatter-label">Scatter plot</div>
+      <canvas id="scatter" height="280"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---- Math helpers ----
+function mean(arr) { return arr.reduce((s,v)=>s+v,0)/arr.length; }
+function std(arr) {
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((s,v)=>s+(v-m)**2,0)/(arr.length-1));
+}
+function pearson(x,y) {
+  const mx=mean(x), my=mean(y);
+  let num=0, dx2=0, dy2=0;
+  for(let i=0;i<x.length;i++){
+    const dx=x[i]-mx, dy=y[i]-my;
+    num+=dx*dy; dx2+=dx*dx; dy2+=dy*dy;
+  }
+  return num/Math.sqrt(dx2*dy2);
+}
+function rank(arr) {
+  const sorted=[...arr].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);
+  const r=new Array(arr.length);
+  let i=0;
+  while(i<sorted.length){
+    let j=i;
+    while(j<sorted.length&&sorted[j].v===sorted[i].v) j++;
+    const avg=(i+j-1)/2+1;
+    for(let k=i;k<j;k++) r[sorted[k].i]=avg;
+    i=j;
+  }
+  return r;
+}
+function spearman(x,y){ return pearson(rank(x),rank(y)); }
+
+// t-distribution p-value (two-tailed) via regularized incomplete beta
+function tPvalue(t, df) {
+  const x = df/(df+t*t);
+  const p = betainc(x, df/2, 0.5);
+  return Math.min(1, p);
+}
+function betainc(x, a, b) {
+  // Simple continued fraction (Lentz)
+  if(x<0||x>1) return NaN;
+  if(x===0) return 0; if(x===1) return 1;
+  const lbeta = lgamma(a)+lgamma(b)-lgamma(a+b);
+  const front = Math.exp(Math.log(x)*a+Math.log(1-x)*b-lbeta)/a;
+  return front * cf(x,a,b);
+}
+function cf(x,a,b){
+  const MAXIT=200, EPS=3e-7;
+  let c=1, d=1-(a+b)*x/(a+1); if(Math.abs(d)<1e-30) d=1e-30; d=1/d;
+  let h=d;
+  for(let m=1;m<=MAXIT;m++){
+    // even
+    let num=m*(b-m)*x/((a+2*m-1)*(a+2*m));
+    d=1+num*d; if(Math.abs(d)<1e-30)d=1e-30; d=1/d;
+    c=1+num/c; if(Math.abs(c)<1e-30)c=1e-30;
+    h*=d*c;
+    // odd
+    num=-(a+m)*(a+b+m)*x/((a+2*m)*(a+2*m+1));
+    d=1+num*d; if(Math.abs(d)<1e-30)d=1e-30; d=1/d;
+    c=1+num/c; if(Math.abs(c)<1e-30)c=1e-30;
+    h*=d*c;
+    if(Math.abs(d*c-1)<EPS) break;
+  }
+  return h;
+}
+function lgamma(z){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=z, x=z, tmp=x+5.5;
+  tmp=(x+0.5)*Math.log(tmp)-tmp;
+  let ser=1.000000000190015;
+  for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return tmp+Math.log(2.5066282746310005*ser/x);
+}
+function pvalue(r, n){
+  if(n<=2) return NaN;
+  const t=r*Math.sqrt((n-2)/(1-r*r));
+  return tPvalue(Math.abs(t), n-2);
+}
+
+// ---- Parse ----
+function parseCol(txt) {
+  return txt.trim().split(/\n/).map(l=>l.trim()).filter(Boolean)
+    .map(l=>parseFloat(l)).filter(v=>!isNaN(v));
+}
+function parsePairs(txt) {
+  const xs=[], ys=[];
+  txt.trim().split(/\n/).forEach(line=>{
+    const parts=line.trim().replace(/,/g,' ').replace(/\t/g,' ').split(/\s+/);
+    if(parts.length>=2){
+      const a=parseFloat(parts[0]), b=parseFloat(parts[1]);
+      if(!isNaN(a)&&!isNaN(b)){ xs.push(a); ys.push(b); }
+    }
+  });
+  return {xs,ys};
+}
+
+function showErr(msg){ const e=document.getElementById('errMsg'); e.textContent=msg; e.style.display='block'; }
+function hideErr(){ document.getElementById('errMsg').style.display='none'; }
+
+function sigBadge(p){
+  if(p<0.001) return {cls:'sig3', label:'p < 0.001 ★★★'};
+  if(p<0.01)  return {cls:'sig2', label:'p < 0.01  ★★'};
+  if(p<0.05)  return {cls:'sig1', label:'p < 0.05  ★'};
+  return {cls:'ns', label:'p ≥ 0.05  ns'};
+}
+
+function interpret(r, p) {
+  const dir = r>0 ? '正' : '负';
+  const abs = Math.abs(r);
+  const str = abs>=0.9?'极强':abs>=0.7?'强':abs>=0.4?'中等':'弱';
+  const sig = p<0.05 ? '具有统计学显著性' : '无统计学显著性（p ≥ 0.05）';
+  const icon = p<0.05 ? (abs>=0.7?'📈':'📊') : '📉';
+  const tip = abs>=0.7
+    ? '（两变量线性关联明显，Pearson r 可作为主要报告指标）'
+    : abs>=0.4
+    ? '（中等相关，建议同时参考 Spearman ρ 以评估非线性关系）'
+    : '（相关性较弱，需结合样本量和研究背景判断实际意义）';
+  return { icon, text:
+    `两组数据呈 <strong>${str}${dir}相关</strong>（Pearson r = ${r.toFixed(4)}），${sig}。${tip}`
+  };
+}
+
+// ---- Scatter ----
+function drawScatter(x, y, canvas) {
+  const dpr = window.devicePixelRatio||1;
+  const W = canvas.offsetWidth, H = 280;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.height = H+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+
+  const pad = {l:48,r:20,t:16,b:40};
+  const pw = W-pad.l-pad.r, ph = H-pad.t-pad.b;
+
+  const minX=Math.min(...x), maxX=Math.max(...x);
+  const minY=Math.min(...y), maxY=Math.max(...y);
+  const rx=maxX-minX||1, ry=maxY-minY||1;
+  const mx = v=>(v-minX)/rx*pw+pad.l;
+  const my = v=>(1-(v-minY)/ry)*ph+pad.t;
+
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.04)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){
+    const yy=pad.t+ph*i/5;
+    ctx.beginPath(); ctx.moveTo(pad.l,yy); ctx.lineTo(pad.l+pw,yy); ctx.stroke();
+    const xx=pad.l+pw*i/5;
+    ctx.beginPath(); ctx.moveTo(xx,pad.t); ctx.lineTo(xx,pad.t+ph); ctx.stroke();
+  }
+
+  // regression line
+  const n=x.length, mxv=mean(x), myv=mean(y);
+  let sxy=0,sxx=0;
+  for(let i=0;i<n;i++){sxy+=(x[i]-mxv)*(y[i]-myv);sxx+=(x[i]-mxv)**2;}
+  const slope=sxy/sxx, intercept=myv-slope*mxv;
+  const x0=minX, x1=maxX;
+  ctx.beginPath();
+  ctx.moveTo(mx(x0), my(slope*x0+intercept));
+  ctx.lineTo(mx(x1), my(slope*x1+intercept));
+  ctx.strokeStyle='rgba(79,195,161,0.35)';
+  ctx.lineWidth=1.5;
+  ctx.setLineDash([4,4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // points
+  for(let i=0;i<n;i++){
+    ctx.beginPath();
+    ctx.arc(mx(x[i]),my(y[i]),3.5,0,Math.PI*2);
+    ctx.fillStyle='rgba(123,156,255,0.75)';
+    ctx.fill();
+  }
+
+  // axes labels
+  ctx.fillStyle='rgba(107,122,153,0.8)';
+  ctx.font='11px JetBrains Mono, monospace';
+  ctx.textAlign='center';
+  ctx.fillText('X', pad.l+pw/2, H-6);
+  ctx.save(); ctx.translate(12, pad.t+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Y',0,0); ctx.restore();
+}
+
+// ---- Main ----
+function calculate(){
+  hideErr();
+  let xs, ys;
+
+  const both = document.getElementById('colBoth').value.trim();
+  const ca = document.getElementById('colA').value.trim();
+  const cb = document.getElementById('colB').value.trim();
+
+  if(both){
+    const p = parsePairs(both);
+    xs=p.xs; ys=p.ys;
+  } else if(ca && cb){
+    xs=parseCol(ca); ys=parseCol(cb);
+  } else {
+    showErr('请输入数据：可在上方两列分别粘贴，或在下方粘贴两列数据。'); return;
+  }
+
+  if(xs.length!==ys.length){ showErr(`数据长度不一致：X 有 ${xs.length} 行，Y 有 ${ys.length} 行。`); return; }
+  if(xs.length<3){ showErr('有效数据不足 3 对，无法计算相关性。'); return; }
+
+  const n=xs.length;
+  const rp=pearson(xs,ys), rs=spearman(xs,ys);
+  const pp=pvalue(rp,n), ps=pvalue(rs,n);
+
+  document.getElementById('pearsonR').textContent = rp.toFixed(4);
+  document.getElementById('pearsonP').textContent = `p = ${pp.toExponential(3)}`;
+  const sb=sigBadge(pp);
+  const spb=sigBadge(ps);
+  const pbadge=document.getElementById('pearsonSig');
+  pbadge.textContent=sb.label; pbadge.className='sig-badge '+sb.cls;
+
+  document.getElementById('spearmanR').textContent = rs.toFixed(4);
+  document.getElementById('spearmanP').textContent = `p = ${ps.toExponential(3)}`;
+  const spbadge=document.getElementById('spearmanSig');
+  spbadge.textContent=spb.label; spbadge.className='sig-badge '+spb.cls;
+
+  document.getElementById('metaN').textContent=n;
+  document.getElementById('metaMx').textContent=mean(xs).toFixed(4);
+  document.getElementById('metaMy').textContent=mean(ys).toFixed(4);
+  document.getElementById('metaSx').textContent=std(xs).toFixed(4);
+  document.getElementById('metaSy').textContent=std(ys).toFixed(4);
+  document.getElementById('nLabel').textContent=`n = ${n} 对`;
+
+  const interp=interpret(rp,pp);
+  document.getElementById('interpIcon').textContent=interp.icon;
+  document.getElementById('interpText').innerHTML=interp.text;
+
+  const res=document.getElementById('results');
+  res.style.display='block';
+  requestAnimationFrame(()=>{
+    const canvas=document.getElementById('scatter');
+    drawScatter(xs,ys,canvas);
+  });
+}
+
+function clearAll(){
+  ['colA','colB','colBoth'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('results').style.display='none';
+  document.getElementById('nLabel').textContent='';
+  hideErr();
+}
+</script>
+</body>
+</html>
